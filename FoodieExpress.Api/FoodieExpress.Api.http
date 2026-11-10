@@ -1,0 +1,11 @@
+@FoodieExpress.Api_HostAddress = http://localhost:5210
+
+GET {{FoodieExpress.Api_HostAddress}}/openapi/v1.json
+Accept: application/json
+
+###
+
+GET {{FoodieExpress.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
