@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/cart_provider.dart';
 import '../cart/cart_screen.dart';
 import '../product/product_detail_screen.dart';
+import '../orders/order_tracking_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -66,7 +67,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // Mở màn hình chi tiết món ăn
   void openProductDetail(Map<String, dynamic> product) {
     Navigator.push(
       context,
@@ -76,6 +76,15 @@ class _HomeScreenState extends State<HomeScreen> {
           price: product['price'] as int,
           icon: product['icon'] as String,
         ),
+      ),
+    );
+  }
+
+  void openOrderHistory() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const OrderTrackingScreen(),
       ),
     );
   }
@@ -322,12 +331,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   return InkWell(
                     borderRadius: BorderRadius.circular(16),
-
-                    // NHẤN VÀO THẺ ĐỂ MỞ CHI TIẾT
                     onTap: () {
                       openProductDetail(product);
                     },
-
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -336,7 +342,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // PRODUCT ICON
                           Expanded(
                             child: Container(
                               width: double.infinity,
@@ -346,20 +351,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Text(
-                                product['icon'],
+                                product['icon'] as String,
                                 style: const TextStyle(fontSize: 65),
                               ),
                             ),
                           ),
 
-                          // PRODUCT INFORMATION
                           Padding(
                             padding: const EdgeInsets.all(10),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  product['name'],
+                                  product['name'] as String,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -392,17 +396,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                     ),
 
-                                    // ADD TO CART NHANH
                                     IconButton(
                                       tooltip: 'Thêm nhanh vào giỏ',
                                       onPressed: () {
                                         context
                                             .read<CartProvider>()
                                             .addItem(
-                                          name: product['name'] as String,
-                                          price: product['price'] as int,
-                                          icon: product['icon'] as String,
-                                        );
+                                              name: product['name'] as String,
+                                              price: product['price'] as int,
+                                              icon: product['icon'] as String,
+                                            );
 
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(
@@ -440,6 +443,19 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedItemColor: Colors.deepOrange,
         unselectedItemColor: Colors.grey,
         currentIndex: 0,
+        onTap: (index) {
+          if (index == 1) {
+            openOrderHistory();
+          } else if (index == 2) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Chức năng tài khoản sẽ được cập nhật.',
+                ),
+              ),
+            );
+          }
+        },
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
