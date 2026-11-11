@@ -5,7 +5,7 @@ import '../models/cart_item.dart';
 class OrderService {
   final Dio _dio = Dio(
     BaseOptions(
-      baseUrl: 'http://localhost:5000',
+      baseUrl: 'https://foodie-express-visibility-public.onrender.com',
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       headers: {'Content-Type': 'application/json'},
