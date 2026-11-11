@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/cart_provider.dart';
 import '../../services/order_service.dart';
-import '../../services/firebase_order_service.dart';
+import '../../services/local_storage_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -21,11 +21,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _noteController = TextEditingController();
 
   final OrderService _orderService = OrderService();
-  final FirebaseOrderService _firebaseOrderService =
-      FirebaseOrderService();
+  final LocalStorageService _localStorageService =
+      LocalStorageService();
 
   String _paymentMethod = 'Tiền mặt khi nhận hàng';
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeliveryInfo();
+  }
+
+  // Tải thông tin nhận hàng đã lưu trên thiết bị.
+  Future<void> _loadDeliveryInfo() async {
+    try {
+      final info = await _localStorageService.getDeliveryInfo();
+
+      if (!mounted) return;
+
+      setState(() {
+        _nameController.text = info['name'] ?? '';
+        _phoneController.text = info['phone'] ?? '';
+        _addressController.text = info['address'] ?? '';
+      });
+    } catch (_) {
+      // Không làm ảnh hưởng đến màn hình thanh toán
+      // nếu không thể đọc dữ liệu cục bộ.
+    }
+  }
 
   String formatPrice(int price) {
     return '${price.toString().replaceAllMapped(
@@ -50,9 +74,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (cart.items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Giỏ hàng đang trống.'),
-        ),
+        const SnackBar(content: Text('Giỏ hàng đang trống.')),
       );
       return;
     }
@@ -60,7 +82,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      // Bước 1: Tạo đơn hàng trên Backend ASP.NET
+      // Gửi yêu cầu tạo đơn hàng lên REST API.
       final result = await _orderService.createOrder(
         customerName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -70,33 +92,28 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         items: List.of(cart.items),
       );
 
+      if (!mounted) return;
+
       final order = result['order'] as Map<String, dynamic>?;
       final orderId = order?['id']?.toString() ?? '';
 
-      // Bước 2: Đồng bộ đơn hàng lên Firebase
-      bool firebaseSaved = false;
-
-      if (order != null && orderId.isNotEmpty) {
-        try {
-          await _firebaseOrderService.saveOrder(
-            orderId: orderId,
-            order: order,
-          );
-
-          firebaseSaved = true;
-        } catch (e) {
-          debugPrint('Firebase sync error: $e');
-        }
+      // Lưu thông tin nhận hàng vào bộ nhớ cục bộ.
+      // Nếu lưu thất bại, đơn hàng API vẫn được xem là thành công.
+      try {
+        await _localStorageService.saveDeliveryInfo(
+          name: _nameController.text.trim(),
+          phone: _phoneController.text.trim(),
+          address: _addressController.text.trim(),
+        );
+      } catch (_) {
+        // Không làm thất bại đơn hàng nếu SharedPreferences lỗi.
       }
 
       if (!mounted) return;
 
-      // Bước 3: Xóa giỏ hàng sau khi Backend tạo đơn thành công
+      // Xóa giỏ hàng sau khi tạo đơn thành công.
       cart.clearCart();
 
-      if (!mounted) return;
-
-      // Bước 4: Thông báo kết quả
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -110,8 +127,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           content: Text(
             'Đơn hàng của bạn đã được tạo.\n'
             'Mã đơn hàng: $orderId\n'
-            'Trạng thái: Chờ xác nhận\n'
-            'Firebase: ${firebaseSaved ? "Đã đồng bộ" : "Chưa đồng bộ"}',
+            'Trạng thái: Chờ xác nhận',
           ),
           actions: [
             TextButton(
