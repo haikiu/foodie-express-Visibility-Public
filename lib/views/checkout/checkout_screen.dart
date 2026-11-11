@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/cart_provider.dart';
 import '../../services/order_service.dart';
+import '../../services/firebase_order_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -14,13 +15,14 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _noteController = TextEditingController();
 
   final OrderService _orderService = OrderService();
+  final FirebaseOrderService _firebaseOrderService =
+      FirebaseOrderService();
 
   String _paymentMethod = 'Tiền mặt khi nhận hàng';
   bool _isSubmitting = false;
@@ -42,20 +44,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _submitOrder() async {
-    debugPrint('========== CHECKOUT BUTTON PRESSED ==========');
-
-    if (!_formKey.currentState!.validate()) {
-      debugPrint('FORM VALIDATION FAILED');
-      return;
-    }
-
-    debugPrint('FORM VALIDATION SUCCESS');
+    if (!_formKey.currentState!.validate()) return;
 
     final cart = context.read<CartProvider>();
 
     if (cart.items.isEmpty) {
-      debugPrint('CART IS EMPTY');
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Giỏ hàng đang trống.'),
@@ -64,13 +57,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
+    setState(() => _isSubmitting = true);
 
     try {
-      debugPrint('========== CALLING POST /api/orders ==========');
-
+      // Bước 1: Tạo đơn hàng trên Backend ASP.NET
       final result = await _orderService.createOrder(
         customerName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -80,17 +70,33 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         items: List.of(cart.items),
       );
 
-      debugPrint('========== API RESPONSE: $result ==========');
-
-      if (!mounted) return;
-
       final order = result['order'] as Map<String, dynamic>?;
       final orderId = order?['id']?.toString() ?? '';
 
+      // Bước 2: Đồng bộ đơn hàng lên Firebase
+      bool firebaseSaved = false;
+
+      if (order != null && orderId.isNotEmpty) {
+        try {
+          await _firebaseOrderService.saveOrder(
+            orderId: orderId,
+            order: order,
+          );
+
+          firebaseSaved = true;
+        } catch (e) {
+          debugPrint('Firebase sync error: $e');
+        }
+      }
+
+      if (!mounted) return;
+
+      // Bước 3: Xóa giỏ hàng sau khi Backend tạo đơn thành công
       cart.clearCart();
 
       if (!mounted) return;
 
+      // Bước 4: Thông báo kết quả
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -104,13 +110,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           content: Text(
             'Đơn hàng của bạn đã được tạo.\n'
             'Mã đơn hàng: $orderId\n'
-            'Trạng thái: Chờ xác nhận',
+            'Trạng thái: Chờ xác nhận\n'
+            'Firebase: ${firebaseSaved ? "Đã đồng bộ" : "Chưa đồng bộ"}',
           ),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-
                 Navigator.of(context).popUntil(
                   (route) => route.isFirst,
                 );
@@ -120,11 +126,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ],
         ),
       );
-    } catch (e, stackTrace) {
-      debugPrint('========== ORDER ERROR ==========');
-      debugPrint('$e');
-      debugPrint('$stackTrace');
-
+    } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -136,9 +138,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     } finally {
       if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
+        setState(() => _isSubmitting = false);
       }
     }
   }
@@ -163,7 +163,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const Text(
                     'Thông tin nhận hàng',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 19,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -197,7 +197,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       if (value == null ||
                           !RegExp(r'^[0-9]{10,11}$')
                               .hasMatch(value.trim())) {
-                        return 'Số điện thoại phải có 10-11 chữ số';
+                        return 'Số điện thoại không hợp lệ';
                       }
                       return null;
                     },
@@ -208,13 +208,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     controller: _addressController,
                     maxLines: 2,
                     decoration: const InputDecoration(
-                      labelText: 'Địa chỉ nhận hàng',
+                      labelText: 'Địa chỉ giao hàng',
                       prefixIcon: Icon(Icons.location_on),
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return 'Vui lòng nhập địa chỉ';
+                        return 'Vui lòng nhập địa chỉ giao hàng';
                       }
                       return null;
                     },
@@ -223,63 +223,54 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
                   TextFormField(
                     controller: _noteController,
-                    maxLines: 2,
                     decoration: const InputDecoration(
                       labelText: 'Ghi chú (không bắt buộc)',
-                      prefixIcon: Icon(Icons.note),
+                      prefixIcon: Icon(Icons.note_alt),
                       border: OutlineInputBorder(),
                     ),
                   ),
 
                   const SizedBox(height: 24),
-
                   const Text(
                     'Phương thức thanh toán',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 19,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 8),
 
-                  RadioListTile<String>(
-                    value: 'Tiền mặt khi nhận hàng',
+                  RadioGroup<String>(
                     groupValue: _paymentMethod,
-                    title: const Text('Tiền mặt khi nhận hàng (COD)'),
-                    secondary: const Icon(Icons.money),
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() {
-                          _paymentMethod = value;
-                        });
+                        setState(() => _paymentMethod = value);
                       }
                     },
-                  ),
-
-                  RadioListTile<String>(
-                    value: 'Chuyển khoản',
-                    groupValue: _paymentMethod,
-                    title: const Text('Chuyển khoản ngân hàng'),
-                    secondary: const Icon(Icons.account_balance),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _paymentMethod = value;
-                        });
-                      }
-                    },
+                    child: const Column(
+                      children: [
+                        RadioListTile<String>(
+                          value: 'Tiền mặt khi nhận hàng',
+                          title: Text('Tiền mặt khi nhận hàng (COD)'),
+                          secondary: Icon(Icons.money),
+                        ),
+                        RadioListTile<String>(
+                          value: 'Chuyển khoản',
+                          title: Text('Chuyển khoản ngân hàng'),
+                          secondary: Icon(Icons.account_balance),
+                        ),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 20),
-
                   const Text(
                     'Đơn hàng của bạn',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 19,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
                   ...cart.items.map(
                     (item) => Padding(
@@ -287,16 +278,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       child: Row(
                         children: [
                           Text(
-                            '${item.icon} ${item.name}',
-                            style: const TextStyle(fontSize: 14),
+                            item.icon,
+                            style: const TextStyle(fontSize: 25),
                           ),
-                          const Spacer(),
-                          Text('x${item.quantity}'),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '${item.name} x${item.quantity}',
+                            ),
+                          ),
                           Text(
                             formatPrice(item.price * item.quantity),
                             style: const TextStyle(
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -310,7 +304,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Tổng thanh toán:',
+                        'Tổng thanh toán',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

@@ -1,11 +1,19 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 
+import 'firebase_options.dart';
 import 'providers/cart_provider.dart';
-import 'views/home/home_screen.dart';
+import 'views/auth/auth_gate.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => CartProvider(),
@@ -26,7 +34,7 @@ class FoodieExpressApp extends StatelessWidget {
         primarySwatch: Colors.deepOrange,
         useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      home: const AuthGate(),
     );
   }
 }

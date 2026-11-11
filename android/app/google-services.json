@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "744459013246",
+    "project_id": "foodie-express-592a8",
+    "storage_bucket": "foodie-express-592a8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:744459013246:android:4d2bf6bcd5578532dfdc2f",
+        "android_client_info": {
+          "package_name": "com.example.foodie_express"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDK68uAwimsaqFqlyqp83e6egxmwmnrz6E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
